@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Flight Simulator - Reliable Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+          "three": "https://esm.sh/three@0.160.0",
+          "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.15.16?deps=react@18.2.0,react-dom@18.2.0,three@0.160.0",
+          "@react-three/drei": "https://esm.sh/@react-three/drei@9.99.0?deps=react@18.2.0,react-dom@18.2.0,three@0.160.0,@react-three/fiber@8.15.16",
+          "zustand": "https://esm.sh/zustand@4.5.0?deps=react@18.2.0"
+        }
+      }
+    </script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #root {
+            width: 100%;
+            height: 100%;
+        }
+
+        .hud-text {
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Fallback UI if JS fails -->
+    <div id="loading-message"
+        class="absolute inset-0 flex items-center justify-center text-white font-mono bg-blue-900 z-50">
+        Loading Flight Simulator...<br />
+        (If stuck, ensure you are using a Local Server or Chrome/Edge)
+    </div>
+
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, Suspense } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { Canvas, useFrame, useLoader } from '@react-three/fiber';
+        import { Sky, Stars, Cloud, useTexture } from '@react-three/drei';
+        import * as THREE from 'three';
+        import { create } from 'zustand';
+
+        // Remove loading screen when React mounts
+        setTimeout(() => {
+            const el = document.getElementById('loading-message');
+            if (el) el.style.display = 'none';
+        }, 1000);
+
+        // --- ERROR BOUNDARY ---
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+            static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="absolute top-0 left-0 bg-red-900/90 text-white p-6 m-4 rounded border border-red-500 z-50 font-mono">
+                            <h2 className="text-xl font-bold mb-2">SIMULATOR ERROR</h2>
+                            <p>{this.state.error.toString()}</p>
+                            <p className="text-sm mt-4 text-gray-300">
+                                * If "TextureLoader" failed, you are likely opening the file directly.<br />
+                                * Please run the local python server we set up.
+                            </p>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
+        // --- STORE ---
+        const MAX_FUEL = 100;
+        const useStore = create((set, get) => ({
+            speed: 0, altitude: 0.5, throttle: 0, pitch: 0, roll: 0, yaw: 0,
+            position: { x: 0, y: 0.5, z: 0 },
+            fuel: MAX_FUEL, gameState: 'playing', message: '',
+
+            setThrottle: (val) => {
+                if (get().gameState === 'playing' && get().fuel > 0)
+                    set({ throttle: Math.max(0, Math.min(1, val)) });
+            },
+            reset: () => set({
+                speed: 0, altitude: 0.5, throttle: 0, pitch: 0, roll: 0, yaw: 0,
+                position: { x: 0, y: 0.5, z: 0 }, fuel: MAX_FUEL, gameState: 'playing', message: ''
+            }),
+            updatePhysics: (delta) => set((state) => {
+                if (state.gameState !== 'playing') return {};
+                let newFuel = state.fuel - (state.throttle * 2.5 * delta); // Hungry engine
+                if (newFuel <= 0) newFuel = 0;
+
+                const targetSpeed = (newFuel > 0 ? state.throttle : 0) * 50;
+                const accel = (targetSpeed - state.speed) * (state.throttle > 0 ? 1.0 : 0.5);
+                let newSpeed = state.speed + accel * delta;
+
+                const lift = Math.pow(newSpeed, 1.5) * 0.04;
+                const gravity = 9.8 * delta;
+                let newAltitude = state.altitude + (Math.sin(state.pitch) * newSpeed * 15 * delta) + (lift * delta) - gravity;
+                if (newAltitude < 0.1) newAltitude = 0.1;
+
+                // Crash Logic
+                let status = state.gameState;
+                let msg = state.message;
+                if (newAltitude <= 0.2 && state.altitude > 1) { // Landing check
+                    if (newSpeed > 30 || Math.abs(state.pitch) > 0.3) {
+                        status = 'crashed'; msg = "HIT GROUND TOO FAST!";
+                    }
+                }
+                if (newFuel <= 0 && newSpeed < 1 && newAltitude < 1) { status = 'gameover'; msg = 'NO FUEL'; }
+
+                const moveZ = -newSpeed * delta;
+                const newYaw = state.yaw - (state.roll * delta * 2.0);
+                return {
+                    fuel: newFuel, speed: newSpeed, altitude: newAltitude,
+                    yaw: newYaw,
+                    gameState: status, message: msg,
+                    position: {
+                        x: state.position.x - Math.sin(newYaw) * moveZ,
+                        y: newAltitude,
+                        z: state.position.z + Math.cos(newYaw) * moveZ
+                    }
+                };
+            }),
+            inputs: { w: false, s: false, a: false, d: false },
+            setInput: (k, v) => set(s => ({ inputs: { ...s.inputs, [k]: v } }))
+        }));
+
+        // --- ASSETS ---
+
+        // Fallback Material for when texture fails
+        function SafeMaterial({ color }) {
+            return <meshStandardMaterial color={color} roughness={0.4} />
+        }
+
+        function TextureMesh({ geometry, position, rotation, fallbackColor }) {
+            // Attempt to use texture, gracefully fallback if it suspends/fails?
+            // Actually inside standard Suspense, if it fails it bubbles up.
+            // We will try hard to load, if it fails the ErrorBoundary outside allows us to recover?
+            // No, R3F is tricky with errors.
+            // Better Strategy: Just use standard materials for reliability in this "debug" run.
+            // BUT user wants textures.
+
+
+            // TEXTURE DATA URI PLACEHOLDER
+            const PLANE_TEXTURE_URI = "PLACEHOLDER_FOR_BASE64_TEXTURE";
+
+            try {
+                // Load from Data URI if present, otherwise try file (fallback handled by catch or outer logic if we keep file path)
+                // We will try to load the base64 string.
+                // If it is the placeholder, we throw to force fallback (or just let it fail silently and show red)
+
+                let textureSrc = './texture.jpg';
+                if (PLANE_TEXTURE_URI && !PLANE_TEXTURE_URI.startsWith("PLACEHOLDER")) {
+                    textureSrc = "data:image/jpeg;base64," + PLANE_TEXTURE_URI;
+                }
+
+                const texture = useLoader(THREE.TextureLoader, textureSrc);
+                return (
+                    <mesh geometry={geometry} position={position} rotation={rotation}>
+                        <meshStandardMaterial map={texture} roughness={0.3} />
+                    </mesh>
+                )
+            } catch (e) {
+                console.warn("Texture Load Failed, using fallback");
+                return (
+                    <mesh geometry={geometry} position={position} rotation={rotation}>
+                        <meshStandardMaterial color={fallbackColor} roughness={0.3} />
+                    </mesh>
+                )
+            }
+        }
+
+        // --- STUNT PLANE ---
+        function StuntPlane() {
+            const group = useRef();
+            const { inputs, throttle } = useStore();
+
+            useFrame((state, delta) => {
+                if (!group.current) return;
+                const s = useStore.getState();
+
+                const tPitch = (inputs.w ? 1 : 0) - (inputs.s ? 1 : 0);
+                const tRoll = (inputs.a ? 1 : 0) - (inputs.d ? -1 : 0);
+
+                useStore.setState({
+                    pitch: THREE.MathUtils.lerp(s.pitch, tPitch, delta * 3),
+                    roll: THREE.MathUtils.lerp(s.roll, tRoll, delta * 3)
+                });
+
+                const { pitch, roll, yaw, position } = useStore.getState();
+                group.current.rotation.set(pitch, yaw, roll);
+                group.current.position.set(position.x, position.y, position.z);
+
+                // Chase Cam
+                const camPos = new THREE.Vector3(0, 6, 14);
+                camPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+                state.camera.position.lerp(camPos.add(group.current.position), delta * 5);
+                state.camera.lookAt(group.current.position.x, group.current.position.y + 1, group.current.position.z);
+            });
+
+            // Geometry Reuse
+            const fuselageGeo = new THREE.CylinderGeometry(0.6, 0.4, 6, 16);
+            fuselageGeo.rotateX(Math.PI / 2);
+
+            return (
+                <group ref={group}>
+                    {/* Body - Try Texture, fallback Red */}
+                    <Suspense fallback={<mesh geometry={fuselageGeo}><meshStandardMaterial color="red" /></mesh>}>
+                        <TextureMesh geometry={fuselageGeo} position={[0, 0, 0]} rotation={[0, 0, 0]} fallbackColor="#ef4444" />
+                    </Suspense>
+
+                    {/* Nose */}
+                    <mesh position={[0, 0, -3.2]} rotation={[Math.PI / 2, 0, 0]}>
+                        <cylinderGeometry args={[0.2, 0.6, 0.5, 16]} />
+                        <meshStandardMaterial color="#dc2626" />
+                    </mesh>
+
+                    {/* Cockpit */}
+                    <mesh position={[0, 0.8, -0.5]} scale={[1, 0.8, 1.5]}>
+                        <sphereGeometry args={[0.7, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
+                        <meshStandardMaterial color="#0f172a" roughness={0} metalness={0.9} />
+                    </mesh>
+
+                    {/* Wings */}
+                    <group position={[0, 0, -1]}>
+                        <mesh position={[2.5, -0.2, 0]} rotation={[0, 0, 0.05]}>
+                            <boxGeometry args={[5, 0.15, 1.5]} />
+                            <meshStandardMaterial color="#ef4444" />
+                        </mesh>
+                        <mesh position={[-2.5, -0.2, 0]} rotation={[0, 0, -0.05]}>
+                            <boxGeometry args={[5, 0.15, 1.5]} />
+                            <meshStandardMaterial color="#ef4444" />
+                        </mesh>
+                    </group>
+
+                    {/* Tail */}
+                    <group position={[0, 0, 2.5]}>
+                        <mesh position={[0, 1, 0]}>
+                            <boxGeometry args={[0.1, 2, 1.2]} />
+                            <meshStandardMaterial color="white" />
+                        </mesh>
+                        <mesh position={[0, 0.2, 0.2]}>
+                            <boxGeometry args={[2.5, 0.1, 1]} />
+                            <meshStandardMaterial color="white" />
+                        </mesh>
+                    </group>
+
+                    {/* Prop */}
+                    <Propeller position={[0, 0, -3.5]} throttle={throttle} />
+                </group>
+            );
+        }
+
+        function Propeller({ position }) {
+            const ref = useRef();
+            const throttle = useStore(s => s.throttle);
+            useFrame((_, delta) => {
+                if (ref.current) ref.current.rotation.z += delta * (10 + throttle * 50);
+            });
+            return (
+                <group position={position} ref={ref}>
+                    <mesh rotation={[Math.PI / 2, 0, 0]}>
+                        <cylinderGeometry args={[0.1, 0.1, 0.5]} />
+                        <meshStandardMaterial color="#333" />
+                    </mesh>
+                    <mesh><boxGeometry args={[3.5, 0.2, 0.05]} /><meshStandardMaterial color="#333" /></mesh>
+                    <mesh rotation={[0, 0, Math.PI / 2]}><boxGeometry args={[3.5, 0.2, 0.05]} /><meshStandardMaterial color="#333" /></mesh>
+                </group>
+            )
+        }
+
+        // --- WORLD ---
+        function World() {
+            const playerPos = useStore(s => s.position);
+            // Simplified infinite grid
+            const gridSize = 3000;
+            const gx = Math.round(playerPos.x / gridSize) * gridSize;
+            const gz = Math.round(playerPos.z / gridSize) * gridSize;
+
+            return (
+                <>
+                    <ambientLight intensity={0.7} />
+                    <directionalLight position={[100, 100, 50]} intensity={1.5} castShadow />
+                    <Sky sunPosition={[100, 20, 100]} />
+
+                    {/* Central Ocean moves with player grid */}
+                    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[gx, 0, gz]}>
+                        <planeGeometry args={[10000, 10000]} />
+                        <meshStandardMaterial color="#0ea5e9" opacity={0.6} transparent />
+                    </mesh>
+
+                    {/* Few Islands centered on grid */}
+                    <group position={[gx, 0, gz]}>
+                        <Island x={500} z={-500} />
+                        <Island x={-800} z={800} />
+                        <Island x={-600} z={-900} />
+                    </group>
+
+                    {/* Home Runway always at 0,0,0 (Doesn't move) */}
+                    <group position={[0, 0.1, 0]}>
+                        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                            <planeGeometry args={[60, 2000]} />
+                            <meshStandardMaterial color="#333" />
+                        </mesh>
+                        {/* Markings */}
+                        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 0]}>
+                            <planeGeometry args={[2, 1800]} />
+                            <meshBasicMaterial color="#fff" />
+                        </mesh>
+                    </group>
+                </>
+            );
+        }
+
+        function Island({ x, z }) {
+            return (
+                <mesh position={[x, -5, z]} rotation={[-Math.PI / 2, 0, 0]}>
+                    <coneGeometry args={[200, 120, 7]} />
+                    <meshStandardMaterial color="#166534" />
+                </mesh>
+            )
+        }
+
+        function LogicLoop() {
+            const updatePhysics = useStore(s => s.updatePhysics);
+            useFrame((_, delta) => updatePhysics(delta));
+            return null;
+        }
+
+        // HUD Component (Overlay)
+        function HUD() {
+            const { speed, altitude, fuel, throttle, gameState, message, reset, setThrottle } = useStore();
+            return (
+                <div className="absolute inset-0 pointer-events-none select-none font-sans">
+                    {/* Screens */}
+                    {(gameState === 'crashed' || gameState === 'gameover') && (
+                        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center pointer-events-auto z-50">
+                            <h1 className="text-6xl font-black text-white mb-2">{gameState.toUpperCase()}</h1>
+                            <p className="text-red-400 text-2xl font-mono mb-8">{message}</p>
+                            <button onClick={reset} className="bg-white text-black px-10 py-4 rounded font-bold hover:bg-yellow-400 transition">RESTART FLIGHT</button>
+                        </div>
+                    )}
+
+                    {/* Top HUD */}
+                    <div className="flex justify-between p-4 text-white">
+                        <div className="bg-black/30 p-2 rounded backdrop-blur">
+                            <div className="text-[10px] text-gray-400">SPEED (kts)</div>
+                            <div className="text-2xl font-mono">{Math.floor(speed * 1.9)}</div>
+                        </div>
+                        <div className="bg-black/30 p-2 rounded backdrop-blur">
+                            <div className="text-[10px] text-gray-400">ALT (ft)</div>
+                            <div className="text-2xl font-mono">{Math.floor(altitude * 3.28)}</div>
+                        </div>
+                    </div>
+
+                    {/* Fuel */}
+                    <div className="absolute top-20 right-4 w-8 h-48 bg-gray-900 border border-gray-600 rounded flex flex-col justify-end p-1">
+                        <div className={`w-full rounded transition-all duration-300 ${fuel < 20 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} style={{ height: `${fuel}%` }}></div>
+                        <div className="absolute -left-12 bottom-0 text-xs text-white rotate-[-90deg]">FUEL</div>
+                    </div>
+
+                    {/* Throttle */}
+                    <div className="absolute left-8 bottom-1/3 w-16 h-64 bg-gray-800/80 rounded border-2 border-gray-500 pointer-events-auto shadow-xl">
+                        <div className="absolute -left-8 top-1/2 text-white text-xs -rotate-90 font-bold">POWER</div>
+                        <input type="range" min="0" max="1" step="0.01" value={throttle} onChange={e => setThrottle(parseFloat(e.target.value))}
+                            className="w-full h-full opacity-0 cursor-ns-resize absolute z-20" style={{ writingMode: 'vertical-lr', direction: 'rtl' }} />
+                        <div className="absolute bottom-0 w-full bg-orange-500 transition-all duration-75 rounded-b" style={{ height: `${throttle * 100}%` }}></div>
+                        {/* Handle */}
+                        <div className="absolute w-20 h-8 bg-gray-300 rounded shadow border border-gray-400 -left-2 flex items-center justify-center z-10 pointer-events-none"
+                            style={{ bottom: `calc(${throttle * 100}% - 16px)` }}>
+                            <div className="w-12 h-1 bg-gray-400"></div>
+                        </div>
+                    </div>
+
+                    {/* Controls Hint */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-center text-white/60 text-xs font-mono">
+                        [W/S] PITCH &nbsp; [A/D] ROLL &nbsp; [MOUSE] THROTTLE
+                    </div>
+                </div>
+            )
+        }
+
+        function App() {
+            // Key Listener
+            useEffect(() => {
+                const handleKey = (e, v) => useStore.getState().setInput(e.key, v);
+                const down = (e) => handleKey(e, true);
+                const up = (e) => handleKey(e, false);
+                window.addEventListener('keydown', down);
+                window.addEventListener('keyup', up);
+                return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); }
+            }, []);
+
+            return (
+                <>
+                    <Canvas shadows camera={{ fov: 60, position: [0, 5, 10] }}>
+                        <ErrorBoundary>
+                            <Suspense fallback={null}>
+                                <World />
+                                <StuntPlane />
+                                <LogicLoop />
+                            </Suspense>
+                        </ErrorBoundary>
+                    </Canvas>
+                    <HUD />
+                </>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

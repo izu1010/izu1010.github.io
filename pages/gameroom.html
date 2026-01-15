@@ -1,38 +1,67 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>izu1010 | 게임방</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <meta name="description" content="Gameroom - Hardcore gaming space.">
+    <title>JaeGyeong | Gameroom</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="../css/style.css">
 </head>
 
 <body>
-    <header>
-        <div class="container">
-            <nav>
-                <a href="../index.html" class="logo">izu1010</a>
-                <ul class="nav-links">
-                    <li><a href="../index.html" class="nav-link">Home</a></li>
-                    <li><a href="playroom.html" class="nav-link">놀이방</a></li>
-                    <li><a href="kidsroom.html" class="nav-link">아이방</a></li>
-                    <li><a href="gameroom.html" class="nav-link" style="color: var(--accent-primary);">게임방</a></li>
-                </ul>
-            </nav>
-        </div>
-    </header>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="logo">JaeGyeong</div>
+        <div class="menu-toggle">☰</div>
+        <ul class="nav-links">
+            <li><a href="../index.html" class="nav-link">Home</a></li>
+            <li><a href="./gameroom.html" class="nav-link">Gameroom</a></li>
+            <li><a href="./kidroom.html" class="nav-link">Kidroom</a></li>
+            <li><a href="./playroom.html" class="nav-link">Playroom</a></li>
+        </ul>
+    </nav>
 
     <main>
-        <section class="container hero">
-            <div class="hero-content">
-                <h1>게임방</h1>
-                <p>게임을 즐길 수 있는 공간입니다.</p>
+        <section class="hero">
+            <h1>Game Room</h1>
+            <p>Level up your experience. Dive into the world of pixels and polygons.</p>
+        </section>
+
+        <section id="featured-games" class="featured-games">
+            <h2>Available Games</h2>
+            <div class="games-grid">
+                <article class="game-card">
+                    <div class="game-image" style="background-image: url('../antigravity2/지뢰찾기.jfif');"></div>
+                    <div class="game-content">
+                        <h3>Minesweeper</h3>
+                        <p>Classic strategy game with a modern twist.</p>
+                        <a href="../antigravity2/index.html" class="play-button">Play Now</a>
+                    </div>
+                </article>
+
+                <article class="game-card">
+                    <div class="game-image" style="background-image: url('../260112AI융합학과/pilot%20sinulator.jpg');">
+                    </div>
+                    <div class="game-content">
+                        <h3>Flight Simulator</h3>
+                        <p>Experience the thrill of flight in 3D.</p>
+                        <a href="../260112AI융합학과/flight-simulator/index.html" class="play-button">Take Off</a>
+                    </div>
+                </article>
             </div>
         </section>
     </main>
 
-    <script src="../assets/js/main.js"></script>
+    <script src="../js/main.js"></script>
 </body>
 
 </html>

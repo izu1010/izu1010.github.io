@@ -1,58 +1,67 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>izu1010 | Portfolio</title>
-    <meta name="description" content="Personal portfolio and digital workspace of izu1010.">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <meta name="description" content="Welcome to JaeGyeong - A portal to Gameroom, Kidroom, and Playroom.">
+    <title>JaeGyeong | Home</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="./css/style.css">
 </head>
 
 <body>
-    <header>
-        <div class="container">
-            <nav>
-                <a href="index.html" class="logo">izu1010</a>
-                <ul class="nav-links">
-                    <li><a href="index.html" class="nav-link">Home</a></li>
-                    <li><a href="pages/playroom.html" class="nav-link">놀이방</a></li>
-                    <li><a href="pages/kidsroom.html" class="nav-link">아이방</a></li>
-                    <li><a href="pages/gameroom.html" class="nav-link">게임방</a></li>
-                </ul>
-            </nav>
-        </div>
-    </header>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="logo">JaeGyeong</div>
+        <div class="menu-toggle">☰</div>
+        <ul class="nav-links">
+            <li><a href="./index.html" class="nav-link">Home</a></li>
+            <li><a href="./pages/gameroom.html" class="nav-link">Gameroom</a></li>
+            <li><a href="./pages/kidroom.html" class="nav-link">Kidroom</a></li>
+            <li><a href="./pages/playroom.html" class="nav-link">Playroom</a></li>
+        </ul>
+    </nav>
 
     <main>
-        <section class="container hero">
-            <div class="hero-content">
-                <h1>이재경의 홈페이지에 오신 것을 <br>환영합니다</h1>
-                <p>Welcome to my personal workspace. I build modern, responsive, and aesthetic web applications.</p>
-                <a href="pages/subpage.html" class="btn">View Previous Work</a>
-                <a href="#" class="btn btn-secondary">Contact Me</a>
-            </div>
+        <section class="hero">
+            <h1>이재경의 홈페이지에 오신 것을 환영합니다.</h1>
+            <p>Explore our curated rooms for gaming, kids, and pure play. Experience the future of interactive
+                entertainment.</p>
+            <a href="#explore" class="cta-button">Start Exploring</a>
         </section>
 
-        <section class="container">
-            <div class="grid">
-                <div class="card">
-                    <h3>Modern Design</h3>
-                    <p>Focusing on UI/UX best practices and aesthetic visuals.</p>
-                </div>
-                <div class="card">
-                    <h3>Clean Code</h3>
-                    <p>Maintainable and scalable code structure.</p>
-                </div>
-                <div class="card">
-                    <h3>Interactive</h3>
-                    <p>Building engaging user experiences.</p>
-                </div>
-            </div>
+
+
+        <section id="explore" class="rooms-grid">
+            <article class="room-card">
+                <h3>Game Room</h3>
+                <p>A hardcore space for gamers. Latest reviews, setups, and gameplays.</p>
+                <a href="./pages/gameroom.html" class="room-link">Enter Gameroom →</a>
+            </article>
+
+            <article class="room-card">
+                <h3>Kid Room</h3>
+                <p>Safe, fun, and educational content designed specifically for children.</p>
+                <a href="./pages/kidroom.html" class="room-link">Enter Kidroom →</a>
+            </article>
+
+            <article class="room-card">
+                <h3>Play Room</h3>
+                <p>Unwind and relax. A general space for fun activities and leisure.</p>
+                <a href="./pages/playroom.html" class="room-link">Enter Playroom →</a>
+            </article>
         </section>
     </main>
 
-    <script src="assets/js/main.js"></script>
+    <script src="./js/main.js"></script>
 </body>
 
 </html>
